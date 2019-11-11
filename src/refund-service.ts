@@ -6,6 +6,8 @@ import { Identities, Managers, Transactions } from "@arkecosystem/crypto";
 import chunk from "lodash.chunk";
 
 export class RefundService {
+    options = null;
+
     public constructor(options) {
         this.options = options;
     }
