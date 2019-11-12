@@ -1,7 +1,7 @@
 {
     "name": "@dated/auto-refunds",
     "description": "Automatically creates and broadcasts HTLC Refunds on the ARK Network",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "author": [
         "dated <hello@dated.fun>"
     ],
