@@ -2,6 +2,7 @@ import { app } from "@arkecosystem/core-container";
 import { Database, EventEmitter, Logger } from "@arkecosystem/core-interfaces";
 import { expirationCalculator } from "@arkecosystem/core-utils";
 import { Identities, Managers, Transactions } from "@arkecosystem/crypto";
+import { isAccepted } from "./utils/is-accepted";
 
 import chunk from "lodash.chunk";
 
@@ -27,7 +28,7 @@ export class RefundService {
                     },
                 );
 
-                logger.info(`[REFUNDS] Found ${locks.length} expired locks`);
+                logger.info(`[REFUNDS] Found ${locks.length} expired HTLC locks`);
 
                 const senderKeys = Identities.Keys.fromPassphrase(this.options.passphrase as string);
                 let nonce = databaseService.walletManager.getNonce(senderKeys.publicKey).plus(1);
@@ -35,16 +36,22 @@ export class RefundService {
                 const transactions = [];
 
                 for (const lock of locks) {
-                    transactions.push(
-                        Transactions.BuilderFactory.htlcRefund()
-                            .nonce(nonce.toFixed())
-                            .senderPublicKey(senderKeys.publicKey)
-                            .htlcRefundAsset({ lockTransactionId: lock.id })
-                            .sign(this.options.passphrase as string)
-                            .build(),
-                    );
+                    if (isAccepted(this.options.publicKeys, lock.senderPublicKey)) {
+                        transactions.push(
+                            Transactions.BuilderFactory.htlcRefund()
+                                .nonce(nonce.toFixed())
+                                .senderPublicKey(senderKeys.publicKey)
+                                .htlcRefundAsset({ lockTransactionId: lock.id })
+                                .sign(this.options.passphrase as string)
+                                .build(),
+                        );
 
-                    nonce = nonce.plus(1);
+                        nonce = nonce.plus(1);
+                    }
+                }
+
+                if (transactions.length) {
+                    logger.info(`[REFUNDS] Sending ${transactions.length} HTLC refunds`);
                 }
 
                 for (const batch of chunk(transactions, 40)) {
