@@ -24,11 +24,11 @@ export class RefundService {
             if (block.height % this.options.interval === 0) {
                 const locks = (await databaseService.connection.transactionsRepository.getOpenHtlcLocks()).filter(
                     tx => {
-                        return tx.open && expirationCalculator.calculateLockExpirationStatus(tx.asset.lock.expiration);
+                        return tx.open && expirationCalculator.calculateLockExpirationStatus(tx.asset.lock.expiration) && isAccepted(this.options.publicKeys, tx.senderPublicKey);
                     },
                 );
 
-                logger.info(`[REFUNDS] Found ${locks.length} expired HTLC locks`);
+                logger.info(`[REFUNDS] Found ${locks.length} matching expired HTLC locks`);
 
                 const senderKeys = Identities.Keys.fromPassphrase(this.options.passphrase as string);
                 let nonce = databaseService.walletManager.getNonce(senderKeys.publicKey).plus(1);
@@ -36,25 +36,24 @@ export class RefundService {
                 const transactions = [];
 
                 for (const lock of locks) {
-                    if (isAccepted(this.options.publicKeys, lock.senderPublicKey)) {
-                        transactions.push(
-                            Transactions.BuilderFactory.htlcRefund()
-                                .nonce(nonce.toFixed())
-                                .senderPublicKey(senderKeys.publicKey)
-                                .htlcRefundAsset({ lockTransactionId: lock.id })
-                                .sign(this.options.passphrase as string)
-                                .build(),
-                        );
+                    transactions.push(
+                        Transactions.BuilderFactory.htlcRefund()
+                            .nonce(nonce.toFixed())
+                            .senderPublicKey(senderKeys.publicKey)
+                            .htlcRefundAsset({ lockTransactionId: lock.id })
+                            .sign(this.options.passphrase as string)
+                            .build(),
+                    );
 
-                        nonce = nonce.plus(1);
-                    }
+                    nonce = nonce.plus(1);
                 }
 
                 if (transactions.length) {
-                    logger.info(`[REFUNDS] Sending ${transactions.length} HTLC refunds`);
+                    logger.info(`[REFUNDS] Broadcasting ${transactions.length} HTLC refunds`);
                 }
 
-                for (const batch of chunk(transactions, 40)) {
+                const maxTransactionsPerRequest = app.resolveOptions("transaction-pool").maxTransactionsPerRequest || 40;
+                for (const batch of chunk(transactions, maxTransactionsPerRequest)) {
                     app.resolvePlugin("p2p")
                         .getMonitor()
                         .broadcastTransactions(batch);
