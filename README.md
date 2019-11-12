@@ -20,6 +20,7 @@ module.exports = {
   "@dated/auto-refunds": {
     enabled: true,
     passphrase: "super dooper passphrase",
+    publicKeys: ["*"], // list of sender public keys for which to send refunds
     interval: 5 // interval in blocks between checks for expired locks, defaults to 5
   },
 };
